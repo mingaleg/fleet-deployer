@@ -74,6 +74,11 @@ class Fleet:
     # ---- main branch -----------------------------------------------------
 
     def refresh_main(self) -> str:
+        sha = self.fetch_main()
+        self.evaluate(sha)
+        return sha
+
+    def fetch_main(self) -> str:
         self.mirror.fetch()
         commits = self.mirror.log(RECENT_COMMITS)
         with self.Session.begin() as s:
@@ -82,9 +87,11 @@ class Fleet:
                     s.add(Commit(sha=c.sha, subject=c.subject, author=c.author, committed_at=c.committed_at))
             set_meta(s, "main_sha", commits[0].sha)
             set_meta(s, "main_fetched_at", iso(utcnow()))
-        for host in self.config.hosts:
-            self.expected_path(commits[0].sha, host)
         return commits[0].sha
+
+    def evaluate(self, sha: str) -> None:
+        for host in self.config.hosts:
+            self.expected_path(sha, host)
 
     def main_sha(self) -> str | None:
         with self.Session() as s:
@@ -139,14 +146,22 @@ class Fleet:
 
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
+            # Polling is quick and evaluation is slow (minutes on a small box),
+            # so poll first: host status shouldn't wait for evaluations.
+            sha = None
             try:
-                self.refresh_main()
+                sha = self.fetch_main()
             except Exception:  # noqa: BLE001
-                log.exception("refreshing main failed")
+                log.exception("fetching main failed")
             try:
                 self.poll_all()
             except Exception:  # noqa: BLE001
                 log.exception("polling hosts failed")
+            if sha:
+                try:
+                    self.evaluate(sha)
+                except Exception:  # noqa: BLE001
+                    log.exception("evaluating main failed")
             self._wake.wait(self.config.poll_interval)
             self._wake.clear()
 
@@ -260,6 +275,7 @@ class Fleet:
         expected = exp.out_path if exp else None
         reachable = bool(st and st.last_attempt_at and st.error is None)
         state = status.compute_state(
+            attempted=bool(st and st.last_attempt_at),
             reachable=reachable,
             ever_succeeded=bool(st and st.last_success_at),
             current=st.current_path if st else None,

@@ -5,7 +5,7 @@ from fleet_deployer.status import compute_state, parse_snapshot
 
 def state(**kw):
     base = dict(
-        reachable=True, ever_succeeded=True, current="/s/a", boot="/s/a",
+        attempted=True, reachable=True, ever_succeeded=True, current="/s/a", boot="/s/a",
         current_kernel="k1", booted_kernel="k1", expected="/s/a",
     )
     return compute_state(**{**base, **kw})
@@ -42,6 +42,10 @@ def test_unreachable_keeps_flags_from_last_success():
 
 def test_never_reached():
     assert state(ever_succeeded=False, reachable=False).state == "unreachable"
+
+
+def test_not_polled_yet():
+    assert state(attempted=False, ever_succeeded=False, reachable=False).state == "never_checked"
 
 
 def test_parse_snapshot():

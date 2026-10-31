@@ -132,3 +132,7 @@ def test_recover_requeues_queued_jobs(ready):
     ready._jobs.get_nowait()
     ready.recover_jobs()
     assert ready._jobs.get_nowait() == job_id
+
+
+def test_hosts_show_not_checked_before_first_poll(ready):
+    assert {h["state"] for h in ready.host_views()} == {"never_checked"}

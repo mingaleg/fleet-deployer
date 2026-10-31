@@ -58,6 +58,7 @@ class HostState:
 
 def compute_state(
     *,
+    attempted: bool,
     reachable: bool,
     ever_succeeded: bool,
     current: str | None,
@@ -66,8 +67,10 @@ def compute_state(
     booted_kernel: str | None,
     expected: str | None,
 ) -> HostState:
+    if not attempted:
+        return HostState("never_checked")
     if not ever_succeeded:
-        return HostState("never_checked" if reachable else "unreachable")
+        return HostState("unreachable")
     flags = []
     if boot and current and boot != current:
         # A `test` deploy is live, or a `boot` deploy is waiting for a reboot.
