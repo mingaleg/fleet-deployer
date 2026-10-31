@@ -6,7 +6,7 @@ import secrets
 from contextlib import asynccontextmanager
 from typing import Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -31,13 +31,20 @@ def create_app(fleet: Fleet, *, start_background: bool = True) -> FastAPI:
 
     app = FastAPI(title="fleet-deployer", lifespan=lifespan)
 
-    def require_token(authorization: str | None = Header(default=None)) -> None:
+    def token_ok(authorization: str | None) -> bool:
         expected = fleet.config.token()
-        if not expected:
-            raise HTTPException(503, "no API token configured; actions are disabled")
         scheme, _, given = (authorization or "").partition(" ")
-        if scheme.lower() != "bearer" or not secrets.compare_digest(given.strip(), expected):
-            raise HTTPException(401, "missing or wrong bearer token", headers={"WWW-Authenticate": "Bearer"})
+        return bool(expected) and scheme.lower() == "bearer" and secrets.compare_digest(given.strip(), expected)
+
+    def client_trusted(request: Request) -> bool:
+        return fleet.config.is_trusted(request.client.host if request.client else None)
+
+    def require_token(request: Request, authorization: str | None = Header(default=None)) -> None:
+        if client_trusted(request) or token_ok(authorization):
+            return
+        if not fleet.config.token():
+            raise HTTPException(503, "no API token configured; actions are only allowed from trusted networks")
+        raise HTTPException(401, "missing or wrong bearer token", headers={"WWW-Authenticate": "Bearer"})
 
     @app.exception_handler(NotFound)
     async def not_found(_, exc: NotFound):
@@ -81,6 +88,15 @@ def create_app(fleet: Fleet, *, start_background: bool = True) -> FastAPI:
     def deploy(req: DeployRequest) -> dict:
         job_id = fleet.submit(req.host, req.mode, req.rev)
         return {"job": job_id}
+
+    @app.get("/api/session")
+    def session(request: Request, authorization: str | None = Header(default=None)) -> dict:
+        """What this client may do, so the dashboard knows whether to ask for the token."""
+        if client_trusted(request):
+            return {"can_act": True, "via": "network"}
+        if token_ok(authorization):
+            return {"can_act": True, "via": "token"}
+        return {"can_act": False, "via": None}
 
     @app.get("/api/auth", dependencies=[Depends(require_token)])
     def auth() -> dict:

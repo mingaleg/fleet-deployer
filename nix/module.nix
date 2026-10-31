@@ -18,6 +18,7 @@ let
         pollInterval
         sshUser
         sshOptions
+        trustedNetworks
         ;
       inherit stateDir;
       # Pairs with restartIfChanged = false below.
@@ -72,6 +73,13 @@ in
       type = lib.types.listOf lib.types.str;
       default = [ ];
       description = "Extra ssh arguments. Host keys are checked strictly against the system known_hosts.";
+    };
+
+    trustedNetworks = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [ "192.168.1.0/24" ];
+      description = "Clients in these networks (IPv4/IPv6 CIDRs) may deploy without the token.";
     };
 
     tokenFile = lib.mkOption {

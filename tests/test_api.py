@@ -45,3 +45,32 @@ def test_deploy_errors(client):
 def test_no_token_configured_disables_actions(client, fleet):
     fleet.config.token_file.write_text("")
     assert client.post("/api/refresh", headers=AUTH).status_code == 503
+
+
+@pytest.fixture
+def lan_client(fleet, runner):
+    runner.toplevels = {(SHA2, "vps"): "/s/v2"}
+    fleet.refresh_main()
+    fleet.config.trusted_networks.extend(["172.26.249.0/24", "10.100.0.0/24"])
+    app = create_app(fleet, start_background=False)
+    with TestClient(app, client=("172.26.249.2", 50000)) as lan, TestClient(app, client=("8.8.8.8", 50000)) as outside:
+        yield lan, outside
+
+
+def test_trusted_network_acts_without_token(lan_client):
+    lan, outside = lan_client
+    assert lan.get("/api/session").json() == {"can_act": True, "via": "network"}
+    assert lan.post("/api/deploy", json={"host": "vps", "mode": "test"}).status_code == 202
+    assert outside.get("/api/session").json() == {"can_act": False, "via": None}
+    assert outside.post("/api/deploy", json={"host": "vps", "mode": "test"}).status_code == 401
+    assert outside.get("/api/session", headers=AUTH).json() == {"can_act": True, "via": "token"}
+
+
+def test_is_trusted(config):
+    config.trusted_networks.extend(["172.26.249.0/24", "10.100.0.0/24", "127.0.0.0/8"])
+    assert config.is_trusted("10.100.0.33")
+    assert config.is_trusted("::ffff:172.26.249.9")
+    assert config.is_trusted("127.0.0.1")
+    assert not config.is_trusted("10.200.0.2")
+    assert not config.is_trusted("testclient")
+    assert not config.is_trusted(None)

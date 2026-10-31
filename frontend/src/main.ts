@@ -43,6 +43,11 @@ interface Job {
   finished_at: string | null;
 }
 
+interface Session {
+  can_act: boolean;
+  via: "network" | "token" | null;
+}
+
 const TOKEN_KEY = "fleet-deployer-token";
 const POLL_MS = 10_000;
 
@@ -157,6 +162,7 @@ const JOB_CLASS: Record<string, string> = {
 let hosts: Host[] = [];
 let jobs: Job[] = [];
 let mainInfo: MainInfo | null = null;
+let session: Session = { can_act: false, via: null };
 let selectedJob: number | null = null;
 let logOffset = 0;
 let logTimer: number | undefined;
@@ -188,12 +194,16 @@ function renderMain(): void {
 function renderAuth(): void {
   const box = $("auth");
   box.replaceChildren();
+  if (session.via === "network") {
+    box.append("Deploys allowed from this network");
+    return;
+  }
   const token = getToken();
   if (token) {
     const forget = el("button", { class: "btn small", type: "button" }, "Forget token");
     forget.addEventListener("click", () => {
       setToken(null);
-      renderAll();
+      load();
     });
     box.append("Token set", forget);
     return;
@@ -206,7 +216,7 @@ function renderAuth(): void {
     setToken(value);
     try {
       await api("/api/auth");
-      renderAll();
+      await load();
     } catch (e) {
       setToken(null);
       flash(`Token rejected: ${(e as Error).message}`, true);
@@ -242,11 +252,11 @@ function hostRow(h: Host): HTMLTableRowElement {
 
   const actions = el("div", { class: "actions" });
   if (h.deploy) {
-    const locked = !getToken() || h.active_job !== null || !h.main_sha;
+    const locked = !session.can_act || h.active_job !== null || !h.main_sha;
     for (const mode of ["test", "switch", "boot"] as Mode[]) {
       const b = el("button", { class: mode === "switch" ? "btn small primary" : "btn small", type: "button" }, mode);
       b.disabled = locked;
-      b.title = !getToken() ? "Enter the API token first" : h.active_job !== null ? `Deploy #${h.active_job} in progress` : `nixos-rebuild ${mode}`;
+      b.title = !session.can_act ? "Enter the API token first" : h.active_job !== null ? `Deploy #${h.active_job} in progress` : `nixos-rebuild ${mode}`;
       b.addEventListener("click", () => askDeploy(h, mode));
       actions.append(b);
     }
@@ -297,7 +307,7 @@ function renderAll(): void {
   renderAuth();
   renderHosts();
   renderJobs();
-  ($("refresh") as HTMLButtonElement).disabled = !getToken();
+  ($("refresh") as HTMLButtonElement).disabled = !session.can_act;
 }
 
 // ---- actions ------------------------------------------------------------
@@ -360,7 +370,12 @@ async function pollLog(): Promise<void> {
 
 async function load(): Promise<void> {
   try {
-    [hosts, jobs, mainInfo] = await Promise.all([api<Host[]>("/api/hosts"), api<Job[]>("/api/jobs"), api<MainInfo>("/api/main")]);
+    [hosts, jobs, mainInfo, session] = await Promise.all([
+      api<Host[]>("/api/hosts"),
+      api<Job[]>("/api/jobs"),
+      api<MainInfo>("/api/main"),
+      api<Session>("/api/session"),
+    ]);
     renderAll();
   } catch (e) {
     flash(`Could not load status: ${(e as Error).message}`, true);

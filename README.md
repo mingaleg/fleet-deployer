@@ -27,13 +27,16 @@ It never deploys on its own: it only shows which hosts are behind.
 
 ## API
 
-GETs are open. POSTs, and `/api/auth`, need `Authorization: Bearer <token>`.
+GETs are open. POSTs, and `/api/auth`, need `Authorization: Bearer <token>`, unless the
+client is in one of `trustedNetworks` (the dashboard asks `/api/session` and skips the token
+prompt there).
 
 | Method | Path | |
 |---|---|---|
 | GET | `/api/hosts`, `/api/hosts/{name}` | host states and timestamps |
 | GET | `/api/main` | tracked commit and recent history |
 | GET | `/api/jobs`, `/api/jobs/{id}`, `/api/jobs/{id}/log?offset=N` | deploys and their logs |
+| GET | `/api/session` | whether this client may act, and why (network or token) |
 | GET | `/api/auth` | check a token |
 | POST | `/api/refresh` | fetch the branch and poll every host now |
 | POST | `/api/deploy` `{"host", "mode": "test"\|"switch"\|"boot", "rev"?}` | queue a deploy; `rev` defaults to the tracked head |

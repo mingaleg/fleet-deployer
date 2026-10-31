@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 from dataclasses import dataclass, field
@@ -33,6 +34,17 @@ class Config:
     ssh_options: list[str] = field(default_factory=list)
     # Exit (for systemd to restart us) once this machine's system changes.
     restart_on_system_change: bool = False
+    # Clients in these networks may act without the token.
+    trusted_networks: list[str] = field(default_factory=list)
+
+    def is_trusted(self, address: str | None) -> bool:
+        try:
+            ip = ipaddress.ip_address(address or "")
+        except ValueError:
+            return False
+        if ip.version == 6 and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        return any(ip in ipaddress.ip_network(n, strict=False) for n in self.trusted_networks)
 
     @property
     def mirror_dir(self) -> Path:
@@ -83,6 +95,7 @@ class Config:
             listen_port=int(raw.get("listenPort", 8090)),
             ssh_options=list(raw.get("sshOptions", [])),
             restart_on_system_change=bool(raw.get("restartOnSystemChange", False)),
+            trusted_networks=list(raw.get("trustedNetworks", [])),
         )
 
     @classmethod
