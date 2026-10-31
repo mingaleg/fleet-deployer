@@ -158,7 +158,7 @@ class Fleet:
         snap, err = None, None
         if host.target:
             try:
-                snap = status.poll(self.runner, self.config.ssh_args(), self.config.ssh_user, host.target)
+                snap = status.poll(self.runner, self.config.ssh_args(), self.config.user_for(host), host.target)
             except Exception as e:  # noqa: BLE001 - any failure means "unreachable"
                 err = str(e)
         else:
@@ -254,7 +254,9 @@ class Fleet:
             log_path.write_text("evaluation failed; see the dashboard for the error\n")
             self._finish(job_id, 1, "evaluation failed")
             return
-        cmd = nixops.deploy_command(self.mirror.flake_ref(sha), host, mode, self.config.ssh_user, target.target)
+        cmd = nixops.deploy_command(
+            self.mirror.flake_ref(sha), host, mode, self.config.user_for(target), target.target
+        )
         env = {"NIX_SSHOPTS": nixops.nix_sshopts(self.config.ssh_args())}
         code = self.runner.run_logged(cmd, log_path, env=env)
         self._finish(job_id, code, None if code == 0 else f"nixos-rebuild exited {code}")

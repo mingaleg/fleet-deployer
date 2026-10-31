@@ -176,3 +176,20 @@ def test_restart_disabled_by_default(ready, tmp_path):
     ready.system_link, ready._started_on = str(link), "/s/old"
     ready.exit = lambda code: pytest.fail("must not exit")
     assert not ready.restart_if_system_changed()
+
+
+def test_per_host_ssh_user(ready, runner):
+    from fleet_deployer.config import HostConfig
+
+    hosts = {**ready.config.hosts, "laptop": HostConfig("laptop", "laptop.lan", True, user="root")}
+    ready.config = type(ready.config)(**{**ready.config.__dict__, "hosts": hosts})
+    runner.toplevels[(SHA2, "laptop")] = "/s/l2"
+    runner.snapshots = {"laptop.lan": snapshot("/s/l1")}
+    ready.poll_all()
+    dests = {c[-2] for c in runner.calls if c[0] == "ssh"}
+    assert "root@laptop.lan" in dests
+    assert "mingaleg@home-gw" in dests  # others keep the global user
+    job_id = ready.submit("laptop", "boot")
+    ready.run_job(job_id)
+    cmd = runner.deployed[-1]
+    assert cmd[cmd.index("--target-host") + 1] == "root@laptop.lan"

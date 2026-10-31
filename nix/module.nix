@@ -26,7 +26,7 @@ let
       listenHost = cfg.listen.address;
       listenPort = cfg.listen.port;
       staticDir = "${cfg.package.frontend}";
-      hosts = lib.mapAttrs (_: h: { inherit (h) target deploy; }) cfg.hosts;
+      hosts = lib.mapAttrs (_: h: { inherit (h) target deploy user; }) cfg.hosts;
     }
   );
 in
@@ -118,6 +118,11 @@ in
               type = lib.types.bool;
               default = true;
               description = "Whether deploys are allowed; false makes the host status-only.";
+            };
+            user = lib.mkOption {
+              type = lib.types.nullOr lib.types.str;
+              default = null;
+              description = "SSH user for this host, overriding sshUser.";
             };
           };
         }

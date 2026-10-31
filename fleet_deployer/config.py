@@ -14,8 +14,10 @@ class HostConfig:
     name: str
     # SSH destination host (no user); None means status can't be polled.
     target: str | None
-    # Whether ronove may deploy to it. mingamini is status-only.
+    # Whether the hub may deploy to it; False makes it status-only.
     deploy: bool = True
+    # SSH user for this host; None means the global ssh_user.
+    user: str | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,9 @@ class Config:
             args += ["-i", str(self.ssh_key_file), "-o", "IdentitiesOnly=yes"]
         return args + self.ssh_options
 
+    def user_for(self, host: HostConfig) -> str:
+        return host.user or self.ssh_user
+
     def token(self) -> str | None:
         if not self.token_file:
             return None
@@ -77,7 +82,7 @@ class Config:
     @classmethod
     def from_dict(cls, raw: dict) -> Config:
         hosts = {
-            name: HostConfig(name=name, target=h.get("target"), deploy=h.get("deploy", True))
+            name: HostConfig(name=name, target=h.get("target"), deploy=h.get("deploy", True), user=h.get("user"))
             for name, h in raw.get("hosts", {}).items()
         }
         opt_path = lambda key: Path(raw[key]) if raw.get(key) else None  # noqa: E731
