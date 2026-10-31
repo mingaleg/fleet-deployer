@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fleet Deployer</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="dist/main.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1>Fleet Deployer</h1>
+      <p class="sub" id="main-line">Loading main…</p>
+    </div>
+    <div class="top-actions">
+      <button id="refresh" class="btn" type="button">Refresh</button>
+      <div id="auth" class="auth"></div>
+    </div>
+  </header>
+
+  <main>
+    <section aria-labelledby="hosts-h">
+      <h2 id="hosts-h">Hosts</h2>
+      <div class="table-wrap">
+        <table class="hosts">
+          <thead>
+            <tr>
+              <th>Host</th><th>State</th><th>Running</th><th>main builds</th>
+              <th>Last checked</th><th>Uptime</th><th class="right">Deploy</th>
+            </tr>
+          </thead>
+          <tbody id="hosts"></tbody>
+        </table>
+      </div>
+      <div id="confirm" class="confirm" hidden></div>
+      <p id="flash" class="flash" hidden></p>
+    </section>
+
+    <section aria-labelledby="jobs-h">
+      <h2 id="jobs-h">Recent deploys</h2>
+      <div class="jobs-grid">
+        <ul id="jobs" class="jobs"></ul>
+        <div class="log-panel">
+          <div class="log-head" id="log-head">Select a deploy to see its log</div>
+          <pre id="log" class="log"></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

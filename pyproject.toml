@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fleet-deployer"
+version = "0.1.0"
+description = "Build a NixOS flake's main branch on a hub host and ship it to the fleet"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "sqlalchemy>=2",
+  "pydantic>=2",
+]
+
+[project.optional-dependencies]
+test = ["pytest", "httpx"]
+
+[project.scripts]
+fleet-deployer = "fleet_deployer.__main__:main"
+
+[tool.setuptools.package-data]
+fleet_deployer = ["status.sh"]
+
+[tool.setuptools.packages.find]
+include = ["fleet_deployer*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
