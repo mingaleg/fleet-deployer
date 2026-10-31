@@ -31,6 +31,15 @@ def create_app(fleet: Fleet, *, start_background: bool = True) -> FastAPI:
 
     app = FastAPI(title="fleet-deployer", lifespan=lifespan)
 
+    @app.middleware("http")
+    async def always_revalidate(request, call_next):
+        # Static files come from the Nix store with a 1970 Last-Modified, which
+        # browsers read as "cache for years" - stale dashboards after a deploy.
+        # no-cache still allows caching, but revalidates (ETag) every time.
+        response = await call_next(request)
+        response.headers.setdefault("Cache-Control", "no-cache")
+        return response
+
     def token_ok(authorization: str | None) -> bool:
         expected = fleet.config.token()
         scheme, _, given = (authorization or "").partition(" ")

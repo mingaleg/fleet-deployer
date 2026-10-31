@@ -74,3 +74,7 @@ def test_is_trusted(config):
     assert not config.is_trusted("10.200.0.2")
     assert not config.is_trusted("testclient")
     assert not config.is_trusted(None)
+
+
+def test_responses_are_revalidated(client):
+    assert client.get("/api/hosts").headers["cache-control"] == "no-cache"
