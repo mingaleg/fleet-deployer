@@ -20,6 +20,8 @@ let
         sshOptions
         ;
       inherit stateDir;
+      # Pairs with restartIfChanged = false below.
+      restartOnSystemChange = true;
       listenHost = cfg.listen.address;
       listenPort = cfg.listen.port;
       staticDir = "${cfg.package.frontend}";
@@ -125,6 +127,11 @@ in
 
     systemd.services.fleet-deployer = {
       description = "Fleet deployer";
+      # A switch must never stop this service: when it deploys its own host,
+      # the switch runs under this service's SSH session and dies with it,
+      # leaving the host half-switched. The service restarts itself once the
+      # new system is live and no deploy is running (restartOnSystemChange).
+      restartIfChanged = false;
       wantedBy = [ "multi-user.target" ];
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
@@ -143,7 +150,8 @@ in
         Group = "fleet-deployer";
         StateDirectory = "fleet-deployer";
         ExecStart = lib.getExe cfg.package;
-        Restart = "on-failure";
+        # Also after its deliberate exit-0 once the system changed.
+        Restart = "always";
         RestartSec = 5;
         LoadCredential =
           lib.optional (cfg.tokenFile != null) "token:${cfg.tokenFile}"

@@ -31,6 +31,8 @@ class Config:
     listen_host: str = "0.0.0.0"
     listen_port: int = 8090
     ssh_options: list[str] = field(default_factory=list)
+    # Exit (for systemd to restart us) once this machine's system changes.
+    restart_on_system_change: bool = False
 
     @property
     def mirror_dir(self) -> Path:
@@ -80,6 +82,7 @@ class Config:
             listen_host=raw.get("listenHost", "0.0.0.0"),
             listen_port=int(raw.get("listenPort", 8090)),
             ssh_options=list(raw.get("sshOptions", [])),
+            restart_on_system_change=bool(raw.get("restartOnSystemChange", False)),
         )
 
     @classmethod

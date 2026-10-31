@@ -136,3 +136,43 @@ def test_recover_requeues_queued_jobs(ready):
 
 def test_hosts_show_not_checked_before_first_poll(ready):
     assert {h["state"] for h in ready.host_views()} == {"never_checked"}
+
+
+@pytest.fixture
+def self_hosted(ready, tmp_path):
+    link = tmp_path / "current-system"
+    link.symlink_to("/s/old")
+    ready.system_link = str(link)
+    ready.config = type(ready.config)(**{**ready.config.__dict__, "restart_on_system_change": True})
+    exits = []
+    ready.exit = exits.append
+    ready._started_on = ready._read_system()
+    return ready, link, exits
+
+
+def test_restarts_once_the_system_changes(self_hosted):
+    fleet, link, exits = self_hosted
+    assert not fleet.restart_if_system_changed()
+    link.unlink()
+    link.symlink_to("/s/new")
+    assert fleet.restart_if_system_changed()
+    assert exits == [0]
+
+
+def test_never_restarts_mid_deploy(self_hosted):
+    fleet, link, exits = self_hosted
+    link.unlink()
+    link.symlink_to("/s/new")
+    with fleet._busy:
+        assert not fleet.restart_if_system_changed()
+    fleet.submit("vps", "switch")
+    assert not fleet.restart_if_system_changed()  # a deploy is still queued
+    assert exits == []
+
+
+def test_restart_disabled_by_default(ready, tmp_path):
+    link = tmp_path / "current-system"
+    link.symlink_to("/s/new")
+    ready.system_link, ready._started_on = str(link), "/s/old"
+    ready.exit = lambda code: pytest.fail("must not exit")
+    assert not ready.restart_if_system_changed()

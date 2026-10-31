@@ -18,9 +18,12 @@ It never deploys on its own: it only shows which hosts are behind.
   - `unreachable`, with when the host was last seen;
   - flags for a live `test` deploy (current ≠ boot default) and for a pending reboot (new
     kernel).
-- **Deploys.** Jobs run one at a time and their output is kept as logs. When the hub
-  deploys itself, its own restart cuts the job off. After restarting, it marks the job
-  succeeded or failed according to what the host runs.
+- **Deploys.** Jobs run one at a time and their output is kept as logs.
+- **Self-deploys.** The hub can deploy itself. The module sets `restartIfChanged = false`,
+  because a switch that stopped this service would kill its own SSH session and leave the
+  host half-switched. Instead the service exits, and systemd restarts it, once
+  `/run/current-system` changes and no deploy is running. If a job does get cut off anyway,
+  it is marked succeeded or failed on startup according to what the host runs.
 
 ## API
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import threading
 from pathlib import Path
@@ -26,6 +27,8 @@ from .db import (
 )
 from .gitmirror import GitMirror
 from .runner import Runner
+
+SYSTEM_LINK = "/run/current-system"
 
 log = logging.getLogger(__name__)
 
@@ -51,11 +54,16 @@ class Fleet:
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
         self._eval_lock = threading.Lock()
+        self._busy = threading.Lock()  # held while a deploy job runs
+        self.system_link = SYSTEM_LINK
+        self.exit = os._exit
+        self._started_on: str | None = None
 
     # ---- lifecycle -------------------------------------------------------
 
     def start(self) -> None:
         self.config.log_dir.mkdir(parents=True, exist_ok=True)
+        self._started_on = self._read_system()
         self.recover_jobs()
         for target in (self._poll_loop, self._job_loop):
             t = threading.Thread(target=target, daemon=True, name=target.__name__)
@@ -66,6 +74,32 @@ class Fleet:
         self._stop.set()
         self._wake.set()
         self._jobs.put(-1)
+
+    def _read_system(self) -> str | None:
+        try:
+            return os.readlink(self.system_link)
+        except OSError:
+            return None
+
+    def restart_if_system_changed(self) -> bool:
+        """Exit once this machine runs a new system, so systemd starts the new us.
+
+        The NixOS module sets restartIfChanged = false: a switch must not stop
+        this service while it may be the one running that switch (a self
+        deploy), since the switch dies with its parent's SSH session. So the
+        service restarts itself afterwards instead - but never mid-deploy.
+        """
+        if not self.config.restart_on_system_change or self._started_on is None:
+            return False
+        now = self._read_system()
+        if now is None or now == self._started_on or not self._busy.acquire(blocking=False):
+            return False
+        if not self._jobs.empty():
+            self._busy.release()
+            return False
+        log.info("system changed (%s -> %s); exiting so systemd restarts the new version", self._started_on, now)
+        self.exit(0)
+        return True
 
     def wake(self) -> None:
         """Ask the poller to refresh main and all hosts now."""
@@ -162,6 +196,7 @@ class Fleet:
                     self.evaluate(sha)
                 except Exception:  # noqa: BLE001
                     log.exception("evaluating main failed")
+            self.restart_if_system_changed()
             self._wake.wait(self.config.poll_interval)
             self._wake.clear()
 
@@ -194,7 +229,9 @@ class Fleet:
             if job_id < 0:
                 return
             try:
-                self.run_job(job_id)
+                with self._busy:
+                    self.run_job(job_id)
+                self.restart_if_system_changed()
             except Exception as e:  # noqa: BLE001
                 log.exception("job %s crashed", job_id)
                 with self.Session.begin() as s:
